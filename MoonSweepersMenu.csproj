@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+
+  <!--
+    Eigener Doorstop-Loader (ohne BepInEx-Chainloader / Il2CppInterop).
+    Doorstop (version.dll) startet die .NET-Runtime aus <Spiel>\dotnet und ruft
+    Doorstop.Entrypoint.Start() in dieser DLL auf. Zugriff aufs Spiel nur über
+    die exportierte il2cpp-C-API von GameAssembly.dll + Dobby-Hooks.
+
+    Bauen:   dotnet build -c Release
+    Ein anderes Spielverzeichnis:  dotnet build -c Release -p:GameDir="D:\Steam\steamapps\common\Moon Sweepers"
+    Existiert das Spielverzeichnis, wird die DLL nach <Spiel>\MoonMenu kopiert.
+  -->
+  <PropertyGroup>
+    <TargetFramework>net6.0</TargetFramework>
+    <AssemblyName>MoonMenu</AssemblyName>
+    <RootNamespace>MoonMenu</RootNamespace>
+    <Version>1.0.0</Version>
+    <Product>MoonMenu</Product>
+    <Description>In-game mod menu and multi-vehicle autodrive for Moon Sweepers</Description>
+    <LangVersion>latest</LangVersion>
+    <Nullable>disable</Nullable>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <CheckEolTargetFramework>false</CheckEolTargetFramework>
+    <GenerateDependencyFile>false</GenerateDependencyFile>
+    <GameDir Condition="'$(GameDir)' == ''">C:\Program Files (x86)\Steam\steamapps\common\Moon Sweepers</GameDir>
+  </PropertyGroup>
+
+  <Target Name="CopyToGame" AfterTargets="Build" Condition="Exists('$(GameDir)\GameAssembly.dll')">
+    <MakeDir Directories="$(GameDir)\MoonMenu" />
+    <Copy SourceFiles="$(TargetPath)" DestinationFolder="$(GameDir)\MoonMenu" />
+  </Target>
+
+</Project>
