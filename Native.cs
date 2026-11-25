@@ -167,9 +167,13 @@ namespace MoonMenu
     {
         private static delegate* unmanaged<IntPtr, IntPtr, IntPtr*, int> _hook;
 
+        // dobby.dll liegt im Release neben MoonMenu.dll; ältere Installationen haben sie unter BepInEx\core.
         public static void Load(string gameDir)
         {
-            var h = NativeLibrary.Load(Path.Combine(gameDir, "BepInEx", "core", "dobby.dll"));
+            var own = Path.Combine(Path.GetDirectoryName(typeof(Dobby).Assembly.Location) ?? gameDir, "dobby.dll");
+            var path = File.Exists(own) ? own : Path.Combine(gameDir, "BepInEx", "core", "dobby.dll");
+            Log.Write("Dobby: " + path);
+            var h = NativeLibrary.Load(path);
             _hook = (delegate* unmanaged<IntPtr, IntPtr, IntPtr*, int>)NativeLibrary.GetExport(h, "DobbyHook");
         }
 

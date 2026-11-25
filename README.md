@@ -55,19 +55,15 @@ Menü öffnen/schließen mit **F1**, Bedienung mit der Maus. Das Fenster lässt 
 
 - Moon Sweepers (Steam), getestet mit Build 26682829 (Unity 6, IL2CPP)
 - Windows x64
-- **BepInEx 6 Bleeding Edge, IL2CPP x64, Build #793** – nur als Loader-Paket: Es liefert Unity Doorstop
-  (`version.dll`), die .NET-Runtime (`dotnet\`) und `dobby.dll`. Der BepInEx-Preloader selbst wird nicht
-  benutzt, weil Il2CppInterop mit diesem Spiel nicht läuft.
+- Sonst nichts: Das Release-Zip enthält alles zum Starten, also Loader (Unity Doorstop), .NET-Runtime
+  und Hook-Bibliothek (Dobby). Siehe [THIRD-PARTY-NOTICES](THIRD-PARTY-NOTICES.md).
 
 ## Installation
 
-1. BepInEx 6 Bleeding Edge #793 (IL2CPP, win-x64) herunterladen:
-   [BepInEx-Unity.IL2CPP-win-x64-6.0.0-be.793+dbc82f0.zip](https://builds.bepinex.dev/projects/bepinex_be/793/BepInEx-Unity.IL2CPP-win-x64-6.0.0-be.793%2Bdbc82f0.zip)
-   (Übersicht: <https://builds.bepinex.dev/projects/bepinex_be>)
-2. Den Inhalt in den Spielordner entpacken (dort, wo `MoonSweepers.exe` liegt):
-   Steam → Moon Sweepers → Rechtsklick → Verwalten → Lokale Dateien durchsuchen.
-3. `MoonMenu-v1.0.0.zip` aus den [Releases](../../releases) **in denselben Ordner** entpacken und die
-   vorhandene `doorstop_config.ini` überschreiben.
+1. `MoonMenu-v1.0.1.zip` aus den [Releases](../../releases/latest) herunterladen.
+2. Den Spielordner öffnen: Steam → Moon Sweepers → Rechtsklick → Verwalten → Lokale Dateien durchsuchen
+   (dort liegt `MoonSweepers.exe`).
+3. Den **Inhalt** des Zips direkt in diesen Ordner entpacken. Wenn Windows fragt, Dateien ersetzen.
 4. Spiel über Steam starten, Spielstand laden, **F1** drücken.
 
 Danach sieht der Spielordner so aus:
@@ -75,24 +71,33 @@ Danach sieht der Spielordner so aus:
 ```
 Moon Sweepers\
   MoonSweepers.exe
-  version.dll            (Doorstop, aus BepInEx)
-  doorstop_config.ini    (aus MoonMenu)
-  dotnet\                (aus BepInEx)
-  BepInEx\core\dobby.dll (aus BepInEx)
-  MoonMenu\MoonMenu.dll  (aus MoonMenu)
+  version.dll            Loader (Unity Doorstop)
+  .doorstop_version
+  doorstop_config.ini    sagt dem Loader, dass er MoonMenu starten soll
+  dotnet\                .NET-Runtime
+  MoonMenu\
+    MoonMenu.dll         die Mod
+    dobby.dll            Hook-Bibliothek
+    licenses\            Lizenztexte
 ```
+
+Hast du BepInEx schon installiert: Das Zip überschreibt `doorstop_config.ini`, und Doorstop startet dann
+MoonMenu statt BepInEx. Andere BepInEx-Plugins laufen dann nicht mehr.
 
 ## Deinstallieren
 
-`version.dll` und den Ordner `MoonMenu` löschen. Optional auch `BepInEx\`, `dotnet\` und `doorstop_config.ini`.
-Oder in `doorstop_config.ini` `enabled = false` setzen.
+`version.dll`, `.doorstop_version`, `doorstop_config.ini`, den Ordner `dotnet` und den Ordner `MoonMenu`
+löschen. Oder nur ausschalten: in `doorstop_config.ini` `enabled = false` setzen.
 
 ## Probleme
 
 - Log: `Moon Sweepers\MoonMenu\MoonMenu.log`. Hier stehen Start, Hooks, Autodrive-Ereignisse
   („Hindernis …", „Festgefahren …", „Abladefahrt …").
-- Kein Menü bei F1: Steht im Log `---- MoonMenu startet ----`? Wenn nicht, prüfe, ob `doorstop_config.ini`
-  auf `MoonMenu\MoonMenu.dll` zeigt und `version.dll` und `dotnet\` vorhanden sind.
+- Kein Menü bei F1: Steht im Log `---- MoonMenu startet ----`? Wenn nicht, prüfe, ob `version.dll`,
+  `doorstop_config.ini` und `dotnet\` direkt neben `MoonSweepers.exe` liegen und nicht in einem Unterordner
+  (das passiert, wenn man den Zip-Ordner selbst statt seines Inhalts entpackt).
+- Ein Virenscanner meldet `version.dll`: Das ist der Doorstop-Loader, der sich ins Spiel lädt. Das Verhalten
+  ist typisch für Mod-Loader. Quelle und Lizenz stehen in [THIRD-PARTY-NOTICES](THIRD-PARTY-NOTICES.md).
 - Nach einem Spiel-Update kann die Mod brechen. Bitte Log anhängen und ein Issue öffnen.
 
 ## Mehrspieler
@@ -117,7 +122,8 @@ aus gehookten `OnGUI`-Methoden. Es enthält keine Spieldateien und keinen dekomp
 ## Credits
 
 - [Unity Doorstop](https://github.com/NeighTools/UnityDoorstop) (NeighTools)
-- [BepInEx](https://github.com/BepInEx/BepInEx) – Loader-Paket mit Doorstop und .NET-Runtime
+- [BepInEx](https://github.com/BepInEx/BepInEx) – aus dessen Build #793 stammen Doorstop und .NET-Runtime im Zip
+- [.NET Runtime](https://github.com/dotnet/runtime) (.NET Foundation)
 - [Dobby](https://github.com/jmpews/Dobby) – Funktions-Hooks
 - Analyse-Werkzeuge: [Cpp2IL](https://github.com/SamboyCoding/Cpp2IL), [AsmResolver](https://github.com/Washi1337/AsmResolver), [Iced](https://github.com/icedland/iced)
 
