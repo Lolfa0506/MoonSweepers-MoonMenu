@@ -34,9 +34,11 @@ Menü öffnen/schließen mit **F1**, Bedienung mit der Maus. Das Fenster lässt 
   es festsitzt, setzt es zurück. Eine blockierte Bahn wird ausgelassen. Ein umgekipptes Fahrzeug richtet es auf.
 - **Abladen:** Bei vollem Tank fährt es zur nächsten Garage, lädt ab und fährt zurück. Ist die Garage
   belegt, wartet es davor.
-- **Mehrere Fahrzeuge:** Autodrive starten, aussteigen. Das Fahrzeug fährt allein weiter. Im nächsten
-  Fahrzeug das Gleiche. Unter „FAHREN GERADE" stehen alle mit Status und Stopp-Knopf. Wieder einsteigen geht
-  jederzeit. **S** im Fahrzeug stoppt dessen Autodrive.
+- **Mehrere Fahrzeuge:** Bahnen-Modus starten, aussteigen. Das Fahrzeug fährt allein weiter. Im nächsten
+  Fahrzeug das Gleiche. Unter „FAHREN GERADE“ stehen alle mit Status und Stopp-Knopf. Wieder einsteigen geht
+  jederzeit. **S** im Fahrzeug stoppt dessen Autodrive. Der Tempomat lenkt nicht und endet deshalb beim
+  Aussteigen.
+- Alle Zeiten (Freifahren, Wartezeiten) laufen in Spielzeit und passen sich dem Spieltempo an.
 
 ### Schnelltasten
 
@@ -60,7 +62,7 @@ Menü öffnen/schließen mit **F1**, Bedienung mit der Maus. Das Fenster lässt 
 
 ## Installation
 
-1. `MoonMenu-v1.0.1.zip` aus den [Releases](../../releases/latest) herunterladen.
+1. Das neueste `MoonMenu-v….zip` aus den [Releases](../../releases/latest) herunterladen.
 2. Den Spielordner öffnen: Steam → Moon Sweepers → Rechtsklick → Verwalten → Lokale Dateien durchsuchen
    (dort liegt `MoonSweepers.exe`).
 3. Den **Inhalt** des Zips direkt in diesen Ordner entpacken. Wenn Windows fragt, Dateien ersetzen.
@@ -81,8 +83,10 @@ Moon Sweepers\
     licenses\            Lizenztexte
 ```
 
-Hast du BepInEx schon installiert: Das Zip überschreibt `doorstop_config.ini`, und Doorstop startet dann
-MoonMenu statt BepInEx. Andere BepInEx-Plugins laufen dann nicht mehr.
+**Update von 1.0.0 oder BepInEx installiert:** `winhttp.dll` im Spielordner löschen. Das ist der Loader von
+BepInEx. Bleibt er liegen, laufen zwei Loader gleichzeitig. Das Zip überschreibt `doorstop_config.ini`, und
+Doorstop startet dann MoonMenu statt BepInEx. Andere BepInEx-Plugins laufen dann nicht mehr. Der Ordner
+`BepInEx` stört nicht.
 
 ## Deinstallieren
 

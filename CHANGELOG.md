@@ -1,5 +1,15 @@
 # Changelog
 
+## 1.0.2 – 2026-11-25
+
+- Autodrive rechnet mit Spielzeit statt Systemzeit. Freifahren, Schonzeiten und Wartezeiten passen jetzt auch
+  bei Spieltempo 0,25x bis 5x. Bei Pause verschwinden Fahrzeuge nicht mehr nach 5 s aus der Liste.
+- Tempo-Faktor wirkt auch, wenn du selbst fährst, nicht nur mit Autodrive. Beim Aussteigen gilt wieder der
+  Originalwert.
+- Tempomat endet beim Aussteigen. Er lenkt nicht und würde ohne Fahrer geradeaus weiterfahren.
+- Abladen aus der Ferne bremst dein Fahrzeug nicht mehr, während du selbst fährst.
+- README: Bei einem Update von 1.0.0 die `winhttp.dll` von BepInEx löschen.
+
 ## 1.0.1 – 2026-11-25
 
 - Release-Zip enthält jetzt alles zum Starten: Unity Doorstop (`version.dll`), .NET-6-Runtime und `dobby.dll`.

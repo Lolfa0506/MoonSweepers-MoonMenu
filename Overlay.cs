@@ -444,7 +444,7 @@ namespace MoonMenu
                 new Slider("Gas", () => Vehicle.Throttle, v => Vehicle.Throttle = v, 0.2f, 1f, 0.05f, v => $"{v * 100:0} %"),
                 new ValueRow("Status", AutoStatus),
                 new Toggle("Ohne Fahrer weiterfahren", null, () => Vehicle.KeepDriving, v => Vehicle.KeepDriving = v),
-                new Note(() => Vehicle.KeepDriving ? "Aussteigen: fährt allein weiter. S im Fahrzeug stoppt es." : "S drücken oder Aussteigen beendet Autodrive."),
+                new Note(() => Vehicle.KeepDriving ? "Aussteigen: Bahnen fahren allein weiter, Tempomat stoppt. S stoppt." :"S drücken oder Aussteigen beendet Autodrive."),
                 new Group("FAHREN GERADE"),
                 new BotListRow(),
                 new Group("FELD"),

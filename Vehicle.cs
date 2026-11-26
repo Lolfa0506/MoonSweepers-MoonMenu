@@ -92,11 +92,21 @@ namespace MoonMenu
 
         public struct BotInfo { public IntPtr Id; public string Name, Status; public bool IsMine; }
 
-        // Für das Menü (Hauptthread). Fahrzeuge, die seit Sekunden keinen Physik-Schritt hatten
+        // Spielzeit in ms: läuft mit dem Spieltempo und steht bei Pause. Alle Bot-Zeiten nutzen sie,
+        // damit Freifahren, Schonzeiten usw. auch bei 0,25x oder 5x Spieltempo gleich lang dauern.
+        static long _now;
+        static long GameMs()
+        {
+            if (mTime == IntPtr.Zero) return Environment.TickCount64;
+            var boxed = Il2Cpp.Invoke(mTime, IntPtr.Zero, null, "Time.time");
+            return boxed == IntPtr.Zero ? _now : (long)(*(float*)Il2Cpp.il2cpp_object_unbox(boxed) * 1000.0);
+        }
+
+        // Für das Menü (Hauptthread). Fahrzeuge, die 5 s Spielzeit keinen Physik-Schritt hatten
         // (entladen/zerstört), fliegen raus; ihre Zeiger werden nie mehr angefasst.
         public static List<BotInfo> BotList()
         {
-            long now = Environment.TickCount64;
+            long now = GameMs();
             var dead = new List<IntPtr>();
             var r = new List<BotInfo>();
             foreach (var kv in Bots)
@@ -130,9 +140,30 @@ namespace MoonMenu
             _requestMode = -1;
             if (old != IntPtr.Zero && Bots.TryGetValue(old, out var b) && b.Busy)
             {
-                if (KeepDriving) Log.Write($"{b.Name}: ausgestiegen, fährt ohne Fahrer weiter.");
+                if (KeepDriving) b.DriverLeft();
                 else { b.StopReq = true; b.StopWhy = "ausgestiegen"; }
             }
+        }
+
+        // Tempo-Faktor für das eigene Fahrzeug (auch von Hand gefahren) und für jedes Fahrzeug mit Bot.
+        // Basis neu übernehmen, wenn das Spiel selbst ändert (Upgrade); sonst Originalwert zurückschreiben.
+        struct Spd { public float Base, Wrote; }
+        static readonly Dictionary<IntPtr, Spd> Speeds = new Dictionary<IntPtr, Spd>();
+
+        static void ApplySpeed(IntPtr self, bool on)
+        {
+            if (oSpeedFactor < 0) return;
+            float cur = *(float*)(self + oSpeedFactor);
+            bool has = Speeds.TryGetValue(self, out var s);
+            if (!on || SpeedMul == 1f)
+            {
+                if (has) { if (cur == s.Wrote) *(float*)(self + oSpeedFactor) = s.Base; Speeds.Remove(self); }
+                return;
+            }
+            if (!has || cur != s.Wrote) s.Base = cur;
+            s.Wrote = s.Base * SpeedMul;
+            *(float*)(self + oSpeedFactor) = s.Wrote;
+            Speeds[self] = s;
         }
 
         // ---- il2cpp ----
@@ -264,7 +295,8 @@ namespace MoonMenu
             {
                 if (self != IntPtr.Zero)
                 {
-                    bool mine = self == Mine;
+                    bool mine = self == Mine, busy = false;
+                    if (mine || Bots.ContainsKey(self)) _now = GameMs();
                     if (mine) MineFrame(self);
                     if (Bots.TryGetValue(self, out var bot))
                     {
@@ -272,6 +304,7 @@ namespace MoonMenu
                         if (!bot.Busy) { bot.Release(self, mine); Bots.Remove(self); }
                         else
                         {
+                            busy = true;
                             // Offenes Menü sperrt die Steuerung (UIBlocked) -> das Spiel nullt Lenkung/Gas.
                             // Während der Bot fährt, die Sperre nur für diesen Physik-Schritt lösen.
                             unblock = Core.MenuBlocking;
@@ -285,6 +318,7 @@ namespace MoonMenu
                             }
                         }
                     }
+                    ApplySpeed(self, mine || busy);
                     if (unblock) Core.SetLocalBlocked(false);
                 }
             }
@@ -318,9 +352,9 @@ namespace MoonMenu
             }
 
             bool full = DustCap > 0 && DustKg >= DustCap * UnloadAt;
-            if (bot == null && ((UnloadNow && DustKg > 0.01) || (AutoUnload && full && Environment.TickCount64 >= _mineRetryAt)))
+            if (bot == null && ((UnloadNow && DustKg > 0.01) || (AutoUnload && full && _now >= _mineRetryAt)))
             {
-                if (!UnloadNow) _mineRetryAt = Environment.TickCount64 + 2000;
+                if (!UnloadNow) _mineRetryAt = _now + 2000;
                 bot = NewBot(self);          // Bot nur fürs Abladen (Modus aus)
                 if (UnloadNow) bot._retryAt = 0;
             }
@@ -574,7 +608,7 @@ namespace MoonMenu
             public readonly IntPtr V;
             public readonly string Name;
             public int Mode;
-            public long LastSeen = Environment.TickCount64;
+            public long LastSeen = _now;
             public bool StopReq, UnloadReq, FinishReq;
             public string StopWhy = "";
 
@@ -642,12 +676,20 @@ namespace MoonMenu
                 Il2Cpp.Invoke(mClean, self, null, "Clean");
             }
 
-            // Am Ende: Bremse, Tempo zurück
+            // Spieler ist ausgestiegen, Bot fährt weiter. Der Tempomat lenkt nicht und weicht nicht aus:
+            // ohne Fahrer würde er stur geradeaus fahren, deshalb endet er (nach einer laufenden Abladefahrt).
+            public void DriverLeft()
+            {
+                if (Mode != (int)Vehicle.Mode.Cruise) { L("ausgestiegen, fährt ohne Fahrer weiter."); return; }
+                if (_trip != Trip.None) { _resumeMode = 0; L("ausgestiegen: Tempomat endet nach der Abladefahrt."); }
+                else { StopReq = true; StopWhy = "ausgestiegen, Tempomat braucht einen Fahrer"; }
+            }
+
+            // Am Ende: Bremse (nicht, wenn der Spieler selbst fährt und der Bot nur abgeladen hat)
             public void Release(IntPtr self, bool mine)
             {
-                Hold(self);
+                if (!mine || _hadControl) Hold(self);
                 if (!mine && oIsDriven >= 0 && Core.MountedNow != self) *(byte*)(self + oIsDriven) = 0;
-                if (oSpeedFactor >= 0 && _baseSpeed > 0f) *(float*)(self + oSpeedFactor) = _baseSpeed;
                 if (FieldText.Length > 0) LastResult[V] = FieldText;
                 // Garage hat nichts genommen: Sperrzeit merken, sonst startet sofort die nächste Abladefahrt
                 if (mine && _retryAt > _mineRetryAt) _mineRetryAt = _retryAt;
@@ -664,7 +706,7 @@ namespace MoonMenu
             // ---------------- Pro Physik-Frame ----------------
             public void Step(IntPtr self, bool mine)
             {
-                LastSeen = Environment.TickCount64;
+                LastSeen = _now;
                 if (StopReq) { StopReq = false; StopNow(StopWhy); return; }
 
                 // Ohne Fahrer: Bürste anlassen (IsDriven setzt der Hook nur für den Physik-Schritt)
@@ -673,15 +715,6 @@ namespace MoonMenu
                 {
                     *(byte*)(self + oCleaning) = 1;
                     CleanFallback(self);
-                }
-
-                // Tempo-Faktor (Basis neu übernehmen, falls das Spiel selbst ändert)
-                if (oSpeedFactor >= 0)
-                {
-                    float cur = *(float*)(self + oSpeedFactor);
-                    if (_baseSpeed < 0f || cur != _wroteSpeed) _baseSpeed = cur;
-                    _wroteSpeed = _baseSpeed * SpeedMul;
-                    *(float*)(self + oSpeedFactor) = _wroteSpeed;
                 }
 
                 _kg = GetDouble(mDustKg, self);
@@ -706,7 +739,7 @@ namespace MoonMenu
                 if (_trip == Trip.None && !_remoteActive)
                 {
                     bool full = _cap > 0 && _kg >= _cap * UnloadAt;
-                    bool trigger = (AutoUnload && full && Environment.TickCount64 >= _retryAt) || (UnloadReq && _kg > 0.01);
+                    bool trigger = (AutoUnload && full && _now >= _retryAt) || (UnloadReq && _kg > 0.01);
                     UnloadReq = false;
                     if (trigger)
                     {
@@ -714,7 +747,7 @@ namespace MoonMenu
                         else
                         {
                             _tripGarage = NearestGarage(pos, out _);
-                            if (_tripGarage == IntPtr.Zero) { UnloadInfo = "keine Garage gefunden"; _retryAt = Environment.TickCount64 + 10_000; }
+                            if (_tripGarage == IntPtr.Zero) { UnloadInfo = "keine Garage gefunden"; _retryAt = _now + 10_000; }
                             else
                             {
                                 _resumePos = pos; _resumeMode = Mode;
@@ -728,11 +761,18 @@ namespace MoonMenu
                 if (_remoteActive && RemoteUnloadStep(self)) _remoteActive = false;   // Autodrive läuft dabei weiter
 
                 // ---- Abladefahrt ----
-                if (_trip != Trip.None) { TripStep(self, pos, fwd, up); return; }
+                if (_trip != Trip.None) { _hadControl = true; TripStep(self, pos, fwd, up); return; }
 
                 // ---- Autodrive ----
                 int mode = Mode;
-                if (mode == 0) { _activeMode = 0; Phase = ""; Avoiding = false; Hold(self); return; }
+                if (mode == 0)
+                {
+                    // nur Abladen aus der Ferne: Fährt der Spieler selbst, nicht bremsen
+                    _activeMode = 0; Phase = ""; Avoiding = false;
+                    if (!mine) Hold(self);
+                    return;
+                }
+                _hadControl = true;
 
                 if (mode == (int)Vehicle.Mode.Cruise)
                 {
@@ -847,7 +887,7 @@ namespace MoonMenu
                 {
                     UnloadInfo = now < 0.01 ? $"abgeladen ({_unloadStartKg - now:0} kg)" : $"gestoppt: {msg ?? "nichts angenommen"}";
                     // Garage nimmt nichts (z. B. Auslaufband voll): nicht sofort wieder hinfahren
-                    if (now >= 0.01) _retryAt = Environment.TickCount64 + 60_000;
+                    if (now >= 0.01) _retryAt = _now + 60_000;
                     L("Abladen fertig: " + UnloadInfo);
                     _unloadFrames = 0;
                     if (V == Mine) _unloadInfo = UnloadInfo;
@@ -864,7 +904,7 @@ namespace MoonMenu
                     foreach (var g in AllGarages())
                         if (Collect(g, self, 50f, out var m) > 0) { _remoteGarage = g; break; }
                         else if (m != null) UnloadInfo = m;
-                    if (_remoteGarage == IntPtr.Zero) { _retryAt = Environment.TickCount64 + 10_000; return true; }
+                    if (_remoteGarage == IntPtr.Zero) { _retryAt = _now + 10_000; return true; }
                 }
                 if (UnloadStep(_remoteGarage, self)) { _remoteGarage = IntPtr.Zero; return true; }
                 return false;
@@ -884,7 +924,7 @@ namespace MoonMenu
                 _frontClear = d0;
                 if (d0 >= need - 0.01f) { _avoidAngle = 0f; _bestClear = d0; Avoiding = false; return 0f; }
 
-                long now = Environment.TickCount64;
+                long now = _now;
                 if (now > _sideUntil)
                 {
                     float l = Clear(origin, Rot(desired, up, -35f), need, up, body, out _);
@@ -948,7 +988,7 @@ namespace MoonMenu
             float SteerFor(float err, Vec3 fwd, Vec3 up)
             {
                 float cmd = Math.Clamp(err / 25f, -1f, 1f);
-                long now = Environment.TickCount64;
+                long now = _now;
                 float dt = Math.Max(1, now - _lastTick) / 1000f;
                 bool learn = now > _reverseUntil + 600;               // beim Rückwärtsfahren dreht sich die Wirkung um
                 if (dt < 0.5f && learn)
@@ -968,7 +1008,7 @@ namespace MoonMenu
             // uturnSide: bei Kehrtwende (> 150 Grad) zu dieser Seite drehen.
             float Steer(IntPtr self, Vec3 desired, float throttle, Vec3 pos, Vec3 fwd, Vec3 up, float need, Vec3 uturnSide = default)
             {
-                long now = Environment.TickCount64;
+                long now = _now;
                 if (AvoidObstacles && need > 1.5f && mSphereCast != IntPtr.Zero && now >= _reverseUntil)
                 {
                     IntPtr body = oBody >= 0 ? *(IntPtr*)(self + oBody) : IntPtr.Zero;
@@ -1024,12 +1064,12 @@ namespace MoonMenu
             void ResetStuck(Vec3 pos)
             {
                 _stuckRef = pos; _slowSince = 0; _reverseUntil = 0; StuckCount = 0; _spotCount = 0;
-                _graceUntil = Environment.TickCount64 + 2500;
+                _graceUntil = _now + 2500;
             }
 
             bool Unstick(Vec3 pos, ref float throttle, ref float steer)
             {
-                long now = Environment.TickCount64;
+                long now = _now;
                 if (now < _reverseUntil) { throttle = -0.7f; steer = _reverseSteer; return true; }
 
                 bool pushing = MathF.Abs(throttle) >= 0.2f;
@@ -1058,7 +1098,7 @@ namespace MoonMenu
             void CheckFlip(IntPtr self)
             {
                 if (oFlipped < 0 || mFlipUpright == IntPtr.Zero || *(byte*)(self + oFlipped) == 0) return;
-                long now = Environment.TickCount64;
+                long now = _now;
                 if (now < _flipAt) return;
                 _flipAt = now + 3000;
                 Il2Cpp.Invoke(mFlipUpright, self, null, "FlipUpright");
@@ -1073,8 +1113,7 @@ namespace MoonMenu
             Sweep _sweep;
             float _brushOff;                // Lage der Bürste entlang der Fahrtrichtung (m, + = vorn)
 
-            // Tempo-Faktor
-            float _baseSpeed = -1f, _wroteSpeed = -1f;
+            bool _hadControl;               // Bot hat gelenkt/Gas gegeben (nicht nur abgeladen)
 
             // Bei "kein Versatz" bleibt die Seite rechts: sie bestimmt dann nur die Wenderichtung.
             Vec3 LaneSide(Vec3 up) => Mul(Norm(Cross(up, _ref)), _shift == 0 ? -1f : 1f);
@@ -1298,7 +1337,7 @@ namespace MoonMenu
 
             void FixStep(IntPtr self, Vec3 pos, Vec3 fwd, Vec3 up)
             {
-                long now = Environment.TickCount64;
+                long now = _now;
                 float tol = Math.Max(0.25f, _w * 0.35f);
                 var right = Norm(Cross(up, fwd));
                 var brush = Add(pos, Mul(fwd, _brushOff));
